@@ -1,4 +1,11 @@
-console.log('Starting application...');
+console.error('SERVER STARTING: Initializing application...'); // Using console.error to bypass potential stdout buffering
+process.on('uncaughtException', (err) => {
+    console.error('CRITICAL ERROR: Uncaught Exception:', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('CRITICAL ERROR: Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
 require('dotenv').config();
 const { Telegraf } = require('telegraf');
 
