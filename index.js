@@ -10,6 +10,11 @@ if (!process.env.BOT_TOKEN) {
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
 // Basic commands
+bot.use(async (ctx, next) => {
+    console.log('Update received:', ctx.update);
+    await next();
+}); // Debug logging
+
 bot.start((ctx) => {
     ctx.reply(`Привет, ${ctx.from.first_name}! Я простой бот на Node.js.\nЯ готов к работе на Timeweb Cloud 🚀`);
 });
@@ -19,6 +24,11 @@ bot.help((ctx) => ctx.reply('Отправь мне любое сообщение
 // Echo handler
 bot.on('text', (ctx) => {
     ctx.reply(`Ты написал: ${ctx.message.text}`);
+});
+
+// Error handling
+bot.catch((err, ctx) => {
+    console.error(`Ooops, encountered an error for ${ctx.updateType}`, err);
 });
 
 // Launch bot
@@ -39,6 +49,6 @@ http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.write('Bot is running!');
     res.end();
-}).listen(PORT, () => {
+}).listen(PORT, '0.0.0.0', () => {
     console.log(`Health check server running on port ${PORT}`);
 });
