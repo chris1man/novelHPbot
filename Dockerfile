@@ -4,7 +4,7 @@ FROM node:20-slim
 WORKDIR /app
 
 # Set default port
-ENV PORT=3000
+ENV PORT=8080
 
 # Install app dependencies
 COPY package*.json ./
@@ -17,7 +17,7 @@ COPY . .
 RUN npm run build
 
 # Expose port so Timeweb knows where to proxy
-EXPOSE 3000
+EXPOSE 8080
 
 # Start the bot
 CMD [ "node", "index.js" ]

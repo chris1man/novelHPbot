@@ -52,7 +52,7 @@ process.once('SIGTERM', () => bot.stop('SIGTERM'));
 
 // Start a dummy HTTP server to satisfy cloud providers that require port binding
 const http = require('http');
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.write('Bot is running!');
