@@ -1,3 +1,4 @@
+console.log('Starting application...');
 require('dotenv').config();
 const { Telegraf } = require('telegraf');
 
