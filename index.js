@@ -21,13 +21,24 @@ bot.on('text', (ctx) => {
     ctx.reply(`Ты написал: ${ctx.message.text}`);
 });
 
-// Enable graceful stop
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
-
 // Launch bot
 bot.launch().then(() => {
     console.log('Bot started successfully');
 }).catch((err) => {
     console.error('Failed to start bot', err);
+});
+
+// Enable graceful stop
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
+
+// Start a dummy HTTP server to satisfy cloud providers that require port binding
+const http = require('http');
+const PORT = process.env.PORT || 3000;
+http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.write('Bot is running!');
+    res.end();
+}).listen(PORT, () => {
+    console.log(`Health check server running on port ${PORT}`);
 });
