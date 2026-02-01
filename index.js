@@ -8,6 +8,11 @@ process.on('unhandledRejection', (reason, promise) => {
 
 require('dotenv').config();
 const { Telegraf } = require('telegraf');
+const connectDB = require('./db');
+const Test = require('./models/Test');
+
+// Connect to database
+connectDB();
 
 // Check for BOT_TOKEN
 if (!process.env.BOT_TOKEN) {
@@ -40,8 +45,16 @@ bot.catch((err, ctx) => {
 });
 
 // Launch bot
-bot.launch().then(() => {
+bot.launch().then(async () => {
     console.log('Bot started successfully');
+
+    // Create a test document to verify DB connection
+    try {
+        await Test.create({ message: 'Hello MongoDB from Bot init!' });
+        console.log('Test document created in MongoDB');
+    } catch (err) {
+        console.error('Error creating test document:', err.message);
+    }
 }).catch((err) => {
     console.error('Failed to start bot', err);
 });
