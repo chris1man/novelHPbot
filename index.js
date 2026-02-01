@@ -26,6 +26,10 @@ bot.on('text', (ctx) => ctx.reply(`Эхо: ${ctx.message.text}`));
     console.log('Webhook registered');
 })();
 
+app.get('*', (req, res) => {
+    res.status(200).send('ALIVE');
+});
+
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
 });
