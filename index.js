@@ -34,6 +34,16 @@ bot.start((ctx) => {
 
 bot.help((ctx) => ctx.reply('Отправь мне любое сообщение, и я отвечу тебе.'));
 
+bot.command('testdb', async (ctx) => {
+    try {
+        const testDoc = await Test.create({ message: `Manual test: ${new Date().toISOString()}` });
+        ctx.reply(`✅ Document created!\nID: ${testDoc._id}\nMessage: ${testDoc.message}`);
+    } catch (err) {
+        ctx.reply(`❌ Error creating document: ${err.message}`);
+        console.error('TestDB Error:', err);
+    }
+});
+
 // Echo handler
 bot.on('text', (ctx) => {
     ctx.reply(`Ты написал: ${ctx.message.text}`);
