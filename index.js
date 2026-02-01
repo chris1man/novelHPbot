@@ -1,4 +1,31 @@
-console.error('SERVER STARTING: Initializing application...'); // Using console.error to bypass potential stdout buffering
+console.error('SERVER STARTING: Initializing application...');
+require('dotenv').config();
+const { Telegraf } = require('telegraf');
+
+// Проверяем токен
+if (!process.env.BOT_TOKEN) {
+    console.error('CRITICAL: BOT_TOKEN is missing!');
+    process.exit(1);
+}
+
+const bot = new Telegraf(process.env.BOT_TOKEN);
+
+// Получаем порт от облака (или 3000 по умолчанию)
+const PORT = process.env.PORT || 3000;
+// ВАЖНО: Ваш домен, который выдал Timeweb
+// Лучше вынести в переменные окружения, но оставим как вы просили для старта
+const WEBHOOK_URL = process.env.WEBHOOK_URL || 'https://chris1man-novelhpbot-df74.twc1.net';
+
+bot.start((ctx) => ctx.reply('Привет! Я работаю на Webhook 🚀'));
+bot.help((ctx) => ctx.reply('Отправь мне текст.'));
+bot.on('text', (ctx) => ctx.reply(`Ты написал: ${ctx.message.text}`));
+
+// Обработка ошибок
+bot.catch((err, ctx) => {
+    console.error(`Error for ${ctx.updateType}`, err);
+});
+
+// Глобальные обработчики ошибок
 process.on('uncaughtException', (err) => {
     console.error('CRITICAL ERROR: Uncaught Exception:', err);
 });
@@ -6,57 +33,20 @@ process.on('unhandledRejection', (reason, promise) => {
     console.error('CRITICAL ERROR: Unhandled Rejection at:', promise, 'reason:', reason);
 });
 
-require('dotenv').config();
-const { Telegraf } = require('telegraf');
+// ЗАПУСК В РЕЖИМЕ WEBHOOK
+console.log(`Setting up webhook on: ${WEBHOOK_URL} port: ${PORT}`);
 
-// Check for BOT_TOKEN
-if (!process.env.BOT_TOKEN) {
-    console.error('Error: BOT_TOKEN is not defined in environment variables.');
-    process.exit(1);
-}
-
-const bot = new Telegraf(process.env.BOT_TOKEN);
-
-// Basic commands
-bot.use(async (ctx, next) => {
-    console.log('Update received:', ctx.update);
-    await next();
-}); // Debug logging
-
-bot.start((ctx) => {
-    ctx.reply(`Привет, ${ctx.from.first_name}! Я простой бот на Node.js.\nЯ готов к работе на Timeweb Cloud 🚀`);
-});
-
-bot.help((ctx) => ctx.reply('Отправь мне любое сообщение, и я отвечу тебе.'));
-
-// Echo handler
-bot.on('text', (ctx) => {
-    ctx.reply(`Ты написал: ${ctx.message.text}`);
-});
-
-// Error handling
-bot.catch((err, ctx) => {
-    console.error(`Ooops, encountered an error for ${ctx.updateType}`, err);
-});
-
-// Launch bot
-bot.launch().then(() => {
-    console.log('Bot started successfully');
+bot.launch({
+    webhook: {
+        domain: WEBHOOK_URL,
+        port: PORT
+    }
+}).then(() => {
+    console.log(`Bot started on ${WEBHOOK_URL} port ${PORT}`);
 }).catch((err) => {
-    console.error('Failed to start bot', err);
+    console.error('Failed to launch bot:', err);
 });
 
-// Enable graceful stop
+// Корректная остановка
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
-
-// Start a dummy HTTP server to satisfy cloud providers that require port binding
-const http = require('http');
-const PORT = process.env.PORT || 8080;
-http.createServer((req, res) => {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.write('Bot is running!');
-    res.end();
-}).listen(PORT, '0.0.0.0', () => {
-    console.log(`Health check server running on port ${PORT}`);
-});
