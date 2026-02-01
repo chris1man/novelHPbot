@@ -5,23 +5,26 @@ const express = require('express');
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const app = express();
 
-// Жестко заданный путь, чтобы мы могли его легко прописать
 const SECRET_PATH = '/webhook';
 const PORT = process.env.PORT || 3000;
+const DOMAIN = 'https://chris1man-novelhpbot-df74.twc1.net';
 
-// Разрешаем JSON
 app.use(express.json());
 
-// Главная страница
-app.get('/', (req, res) => res.send('Bot is running. Waiting for Telegram...'));
+app.get('/', (req, res) => res.send('Bot is running'));
 
-// Слушаем обновления от Телеграм
 app.post(SECRET_PATH, (req, res) => {
-    bot.handleUpdate(req.body, res);
+    bot.handleUpdate(req.body);
+    res.sendStatus(200);
 });
 
 bot.start((ctx) => ctx.reply('Ура! Я наконец-то заработал! 🚀'));
 bot.on('text', (ctx) => ctx.reply(`Эхо: ${ctx.message.text}`));
+
+(async () => {
+    await bot.telegram.setWebhook(`${DOMAIN}${SECRET_PATH}`);
+    console.log('Webhook registered');
+})();
 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
