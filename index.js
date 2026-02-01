@@ -44,6 +44,19 @@ bot.command('testdb', async (ctx) => {
     }
 });
 
+bot.command('viewdb', async (ctx) => {
+    try {
+        const docs = await Test.find().sort({ createdAt: -1 }).limit(5);
+        if (docs.length === 0) {
+            return ctx.reply('📭 База данных пока пуста.');
+        }
+        const message = docs.map(d => `🆔 ${d._id}\n📝 ${d.message}\n📅 ${d.createdAt.toISOString()}`).join('\n\n');
+        ctx.reply(`🗄 Последние 5 записей:\n\n${message}`);
+    } catch (err) {
+        ctx.reply(`❌ Ошибка чтения базы: ${err.message}`);
+    }
+});
+
 // Echo handler
 bot.on('text', (ctx) => {
     ctx.reply(`Ты написал: ${ctx.message.text}`);
