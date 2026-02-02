@@ -1,4 +1,5 @@
-console.error('SERVER STARTING: Initializing application...'); // Using console.error to bypass potential stdout buffering
+console.error('SERVER STARTING: Initializing application...');
+
 process.on('uncaughtException', (err) => {
     console.error('CRITICAL ERROR: Uncaught Exception:', err);
 });
@@ -7,77 +8,146 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 require('dotenv').config();
-const { Telegraf } = require('telegraf');
+const { Telegraf, Markup } = require('telegraf');
 const connectDB = require('./db');
-const Test = require('./models/Test');
+const User = require('./models/User');
+const scenes = require('./scenes');
 
 // Connect to database
 connectDB();
 
-// Check for BOT_TOKEN
 if (!process.env.BOT_TOKEN) {
-    console.error('Error: BOT_TOKEN is not defined in environment variables.');
+    console.error('Error: BOT_TOKEN is not defined.');
     process.exit(1);
 }
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
-// Basic commands
-bot.use(async (ctx, next) => {
-    console.log('Update received:', ctx.update);
-    await next();
-}); // Debug logging
+// --- Helper Functions ---
 
-bot.start((ctx) => {
-    ctx.reply(`Привет, ${ctx.from.first_name}! Я простой бот на Node.js.\nЯ готов к работе на Timeweb Cloud 🚀`);
-});
+// Function to render a scene
+async function renderScene(ctx, sceneId, user) {
+    const scene = scenes[sceneId];
+    if (!scene) {
+        console.error(`Scene not found: ${sceneId}`);
+        return ctx.reply("Ошибка: Сцена не найдена.");
+    }
 
-bot.help((ctx) => ctx.reply('Отправь мне любое сообщение, и я отвечу тебе.'));
+    // Handle Logic Transition Scenes (Auto-jump)
+    if (scene.type === 'logic_transition') {
+        const nextId = scene.nextScene(user);
+        // Save the new scene before recursing
+        user.currentScene = nextId;
+        await user.save();
+        return renderScene(ctx, nextId, user);
+    }
 
-bot.command('testdb', async (ctx) => {
+    // Build Keyboard
+    const buttons = [];
+    if (scene.buttons) {
+        scene.buttons.forEach(btn => {
+            buttons.push([Markup.button.callback(btn.text, btn.callback_data)]);
+        });
+    }
+
+    // Send Message
+    // NOTE: To edit message instead of sending new one, we could use try-catch on editMessageText
+    // But for a novel, keeping history is often better, or we can delete previous.
+    // Here we will just send new message for simplicity and history.
+    await ctx.reply(scene.text, Markup.inlineKeyboard(buttons));
+
+    // Update user state (redundant if we save on transition, but good for safety)
+    if (user.currentScene !== sceneId) {
+        user.currentScene = sceneId;
+        await user.save();
+    }
+}
+
+// --- Middleware & Commands ---
+
+// Helper to get or create user
+async function getUser(ctx) {
+    const telegramId = ctx.from.id;
+    let user = await User.findOne({ telegramId });
+    if (!user) {
+        user = await User.create({
+            telegramId,
+            firstName: ctx.from.first_name,
+            currentScene: 'scene_1'
+        });
+    }
+    return user;
+}
+
+bot.start(async (ctx) => {
     try {
-        const testDoc = await Test.create({ message: `Manual test: ${new Date().toISOString()}` });
-        ctx.reply(`✅ Document created!\nID: ${testDoc._id}\nMessage: ${testDoc.message}`);
+        const user = await getUser(ctx);
+        // Reset user for new game if needed, or just resume
+        // For /start, let's reset to scene 1 if requested or if new
+        // Check if argument 'reset' is passed or just force start scene 1
+        user.currentScene = 'scene_1';
+        user.stats = { closeness: 0, darkness: 0, trust: 0 };
+        user.flags = [];
+        user.house = null;
+        await user.save();
+
+        await ctx.reply(`Добро пожаловать в "Змею" (Visual Novel Bot).`);
+        await renderScene(ctx, 'scene_1', user);
     } catch (err) {
-        ctx.reply(`❌ Error creating document: ${err.message}`);
-        console.error('TestDB Error:', err);
+        console.error('Error in start:', err);
+        ctx.reply('Произошла ошибка при запуске.');
     }
 });
 
-bot.command('viewdb', async (ctx) => {
+bot.on('callback_query', async (ctx) => {
     try {
-        const docs = await Test.find().sort({ createdAt: -1 }).limit(5);
-        if (docs.length === 0) {
-            return ctx.reply('📭 База данных пока пуста.');
+        const callbackData = ctx.callbackQuery.data;
+        const user = await getUser(ctx);
+        const currentSceneId = user.currentScene;
+        const currentScene = scenes[currentSceneId];
+
+        if (!currentScene) {
+            return ctx.reply('Сцена не найдена или устаревшая сессия. Напишите /start');
         }
-        const message = docs.map(d => `🆔 ${d._id}\n📝 ${d.message}\n📅 ${d.createdAt.toISOString()}`).join('\n\n');
-        ctx.reply(`🗄 Последние 5 записей:\n\n${message}`);
+
+        // Find the button definition that was clicked
+        const button = currentScene.buttons ? currentScene.buttons.find(b => b.callback_data === callbackData) : null;
+
+        if (button) {
+            // 1. Apply Effects
+            if (button.effects) {
+                button.effects(user);
+                // Mongoose doesn't always detect deep object changes, mark modified
+                user.markModified('stats');
+                user.markModified('flags');
+            }
+
+            // 2. Determine Next Scene
+            let nextSceneId = button.nextScene;
+            if (typeof nextSceneId === 'function') {
+                nextSceneId = nextSceneId(user);
+            }
+
+            // 3. Save User State
+            user.currentScene = nextSceneId;
+            await user.save();
+
+            // 4. Render Next Scene
+            await ctx.answerCbQuery(); // Stop loading animation
+            await renderScene(ctx, nextSceneId, user);
+        } else {
+            await ctx.answerCbQuery("Неизвестное действие.");
+        }
+
     } catch (err) {
-        ctx.reply(`❌ Ошибка чтения базы: ${err.message}`);
+        console.error('Error in callback_query:', err);
+        ctx.answerCbQuery('Произошла ошибка.');
     }
-});
-
-// Echo handler
-bot.on('text', (ctx) => {
-    ctx.reply(`Ты написал: ${ctx.message.text}`);
-});
-
-// Error handling
-bot.catch((err, ctx) => {
-    console.error(`Ooops, encountered an error for ${ctx.updateType}`, err);
 });
 
 // Launch bot
-bot.launch().then(async () => {
+bot.launch().then(() => {
     console.log('Bot started successfully');
-
-    // Create a test document to verify DB connection
-    try {
-        await Test.create({ message: 'Hello MongoDB from Bot init!' });
-        console.log('Test document created in MongoDB');
-    } catch (err) {
-        console.error('Error creating test document:', err.message);
-    }
 }).catch((err) => {
     console.error('Failed to start bot', err);
 });
@@ -86,7 +156,7 @@ bot.launch().then(async () => {
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
 
-// Start a dummy HTTP server to satisfy cloud providers that require port binding
+// Health check server
 const http = require('http');
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
